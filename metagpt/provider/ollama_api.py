@@ -34,7 +34,7 @@ class OllamaMessageBase:
     def api_suffix(self) -> str:
         raise NotImplementedError
 
-    def apply(self, messages: list[dict]) -> dict:
+    def apply(self, messages: list[dict], **message_kwargs) -> dict:
         raise NotImplementedError
 
     def decode(self, response: OpenAIResponse) -> dict:
@@ -80,7 +80,7 @@ class OllamaMessageChat(OllamaMessageBase, metaclass=OllamaMessageMeta):
     def api_suffix(self) -> str:
         return "/chat"
 
-    def apply(self, messages: list[dict]) -> dict:
+    def apply(self, messages: list[dict], **message_kwargs) -> dict:
         content = messages[0]["content"]
         prompts = []
         images = []
@@ -101,6 +101,7 @@ class OllamaMessageChat(OllamaMessageBase, metaclass=OllamaMessageMeta):
                 messes.append({"role": "user", "content": prompt})
         sends = {"model": self.model, "messages": messes}
         sends.update(self.additional_kwargs)
+        sends.update(message_kwargs)
         return sends
 
     def get_choice(self, to_choice_dict: dict) -> str:
@@ -171,7 +172,7 @@ class OllamaMessageEmbed(OllamaMessageEmbeddings, metaclass=OllamaMessageMeta):
     def api_suffix(self) -> str:
         return "/embed"
 
-    def apply(self, messages: list[dict]) -> dict:
+    def apply(self, messages: list[dict], **message_kwargs) -> dict:
         content = messages[0]["content"]
         prompts = []  # NOTE: not support image to embedding
         if isinstance(content, list):
@@ -183,6 +184,7 @@ class OllamaMessageEmbed(OllamaMessageEmbeddings, metaclass=OllamaMessageMeta):
             prompts.append(content)
         sends = {"model": self.model, "input": prompts}
         sends.update(self.additional_kwargs)
+        sends.update(message_kwargs)
         return sends
 
 
@@ -218,11 +220,13 @@ class OllamaLLM(BaseLLM):
     def get_usage(self, resp: dict) -> dict:
         return {"prompt_tokens": resp.get("prompt_eval_count", 0), "completion_tokens": resp.get("eval_count", 0)}
 
-    async def _achat_completion(self, messages: list[dict], timeout: int = USE_CONFIG_TIMEOUT) -> dict:
+    async def _achat_completion(self, messages: list[dict], timeout: int = USE_CONFIG_TIMEOUT, response_format: Optional[dict[str, any]] = None) -> dict:
+        if response_format and self.config.api_type.value in response_format:
+            response_format = response_format[self.config.api_type.value]
         resp, _, _ = await self.client.arequest(
             method=self.http_method,
             url=self.ollama_message.api_suffix,
-            params=self.ollama_message.apply(messages=messages),
+            params=self.ollama_message.apply(messages=messages, format=response_format),
             request_timeout=self.get_timeout(timeout),
         )
         if isinstance(resp, AsyncGenerator):
