@@ -98,7 +98,7 @@ class BasePlayer(Role):
         latest_instruction = self.get_latest_instruction()
 
         reflection = (
-            await Reflect().run(
+            await self._init_action(Reflect()).run(
                 profile=self.profile, name=self.name, context=memories, latest_instruction=latest_instruction
             )
             if self.use_reflection
@@ -106,7 +106,7 @@ class BasePlayer(Role):
         )
 
         experiences = (
-            RetrieveExperiences().run(
+            await self._init_action(RetrieveExperiences()).run(
                 query=reflection, profile=self.profile, excluded_version=self.new_experience_version
             )
             if self.use_experience
@@ -115,7 +115,7 @@ class BasePlayer(Role):
 
         # 根据自己定义的角色Action，对应地去run，run的入参可能不同
         if isinstance(todo, Speak):
-            rsp = await todo.run(
+            rsp = await self._init_action(todo).run(
                 profile=self.profile,
                 name=self.name,
                 context=memories,
@@ -126,7 +126,7 @@ class BasePlayer(Role):
             restricted_to = set()
 
         elif isinstance(todo, NighttimeWhispers):
-            rsp = await todo.run(
+            rsp = await self._init_action(todo).run(
                 profile=self.profile, name=self.name, context=memories, reflection=reflection, experiences=experiences
             )
             restricted_to = {RoleType.MODERATOR.value, self.profile}  # 给Moderator发送使用特殊技能的加密消息

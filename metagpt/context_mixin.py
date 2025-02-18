@@ -12,12 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from metagpt.config2 import Config
 from metagpt.context import Context
 from metagpt.provider.base_llm import BaseLLM
-
+from metagpt.configs.models_config import ModelsConfig
 
 class ContextMixin(BaseModel):
     """Mixin class for context and config"""
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+
+    models_config: ModelsConfig = ModelsConfig.default()
 
     # Pydantic has bug on _private_attr when using inheritance, so we use private_* instead
     # - https://github.com/pydantic/pydantic/issues/7142

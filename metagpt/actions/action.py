@@ -26,7 +26,7 @@ from metagpt.schema import (
 )
 from metagpt.utils.format import ResponseFormat
 from metagpt.utils.project_repo import ProjectRepo
-
+from metagpt.utils.rate_limitor import rate_limitor_registry
 
 class Action(SerializationMixin, ContextMixin, BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -49,7 +49,8 @@ class Action(SerializationMixin, ContextMixin, BaseModel):
         if config:
             llm = create_llm_instance(config)
             llm.cost_manager = data.llm.cost_manager
-            data.llm = llm
+            llm.current_rate_limitor = rate_limitor_registry.register(data.llm_name_or_type, config)
+            data.set_llm(llm, override=True)
         return data
 
     @property

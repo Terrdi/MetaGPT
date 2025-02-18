@@ -29,6 +29,7 @@ from metagpt.schema import Message
 from metagpt.utils.common import log_and_reraise
 from metagpt.utils.cost_manager import CostManager, Costs
 from metagpt.utils.format import ResponseFormat
+from metagpt.utils.rate_limitor import RateLimitor, rate_limitor_registry
 
 class BaseLLM(ABC):
     """LLM API abstract class, requiring all inheritors to provide a series of standard capabilities"""
@@ -42,6 +43,7 @@ class BaseLLM(ABC):
     cost_manager: Optional[CostManager] = None
     model: Optional[str] = None  # deprecated
     pricing_plan: Optional[str] = None
+    current_rate_limitor: Optional[RateLimitor] = None
 
     @abstractmethod
     def __init__(self, config: LLMConfig):
@@ -264,6 +266,14 @@ class BaseLLM(ABC):
         """Set model and return self. For example, `with_model("gpt-3.5-turbo")`."""
         self.config.model = model
         return self
+    
+    @property
+    def rate_limitor(self) -> RateLimitor:
+        return self.current_rate_limitor
+
+    @rate_limitor.setter
+    def rate_limitor(self, rate_limitor: RateLimitor):
+        self.current_rate_limitor = rate_limitor
 
     def get_timeout(self, timeout: int) -> int:
         return timeout or self.config.timeout or LLM_API_TIMEOUT

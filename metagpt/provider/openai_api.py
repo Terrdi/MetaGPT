@@ -89,6 +89,7 @@ class OpenAILLM(BaseLLM):
     async def _achat_completion_stream(self, messages: list[dict], timeout=USE_CONFIG_TIMEOUT, response_format: Optional[ResponseFormat] = None) -> str:
         if response_format and isinstance(response_format, ResponseFormat):
             response_format = response_format.get_response_format(self.config.api_type)
+        self.rate_limitor.acquire(messages)
         response: AsyncStream[ChatCompletionChunk] = await self.aclient.chat.completions.create(
             **self._cons_kwargs(messages, timeout=self.get_timeout(timeout), response_format=response_format), stream=True
         )
@@ -126,6 +127,7 @@ class OpenAILLM(BaseLLM):
             usage = self._calc_usage(messages, full_reply_content)
 
         self._update_costs(usage)
+        self.rate_limitor.cost_token(usage)
         return full_reply_content
 
     def _cons_kwargs(self, messages: list[dict], timeout=USE_CONFIG_TIMEOUT, **extra_kwargs) -> dict:
@@ -147,9 +149,11 @@ class OpenAILLM(BaseLLM):
         return kwargs
 
     async def _achat_completion(self, messages: list[dict], timeout=USE_CONFIG_TIMEOUT) -> ChatCompletion:
+        self.rate_limitor.acquire(messages)
         kwargs = self._cons_kwargs(messages, timeout=self.get_timeout(timeout))
         rsp: ChatCompletion = await self.aclient.chat.completions.create(**kwargs)
         self._update_costs(rsp.usage)
+        self.rate_limitor.cost_token(rsp.usage)
         return rsp
 
     async def acompletion(self, messages: list[dict], timeout=USE_CONFIG_TIMEOUT) -> ChatCompletion:

@@ -22,7 +22,7 @@ from metagpt.utils.cost_manager import (
 )
 from metagpt.utils.git_repository import GitRepository
 from metagpt.utils.project_repo import ProjectRepo
-
+from metagpt.utils.rate_limitor import rate_limitor_registry
 
 class AttrDict(BaseModel):
     """A dict-like object that allows access to keys as attributes, compatible with Pydantic."""
@@ -93,6 +93,8 @@ class Context(BaseModel):
         self._llm = create_llm_instance(self.config.llm)
         if self._llm.cost_manager is None:
             self._llm.cost_manager = self._select_costmanager(self.config.llm)
+        if self._llm.current_rate_limitor is None:
+            self._llm.current_rate_limitor = rate_limitor_registry.register(self.config.llm.model, self.config.llm)
         return self._llm
 
     def llm_with_cost_manager_from_llm_config(self, llm_config: LLMConfig) -> BaseLLM:
@@ -101,6 +103,8 @@ class Context(BaseModel):
         llm = create_llm_instance(llm_config)
         if llm.cost_manager is None:
             llm.cost_manager = self._select_costmanager(llm_config)
+        if llm.current_rate_limitor is None:
+            llm.current_rate_limitor = rate_limitor_registry.register(llm_config.model, llm_config)
         return llm
 
     def serialize(self) -> Dict[str, Any]:

@@ -13,8 +13,12 @@ from metagpt.utils.common import parse_json_code_block
 from metagpt.utils.format import ResponseFormat, JsonResponseFormat
 
 def log_and_parse_json(name: str, rsp: str) -> dict:
-    rsp = rsp.replace("\n", " ")
-    logger.debug(f"{name} result: {rsp}")
+    if isinstance(rsp, str):
+        rsp = rsp.replace("\n", " ")
+        logger.debug(f"{name} result: {rsp}")
+    else:
+        logger.debug(f"{name} result: {rsp.decode('utf-8')}")
+        return rsp
     json_blocks = parse_json_code_block(rsp)
     try:
         rsp_json = json.loads(json_blocks[0])

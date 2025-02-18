@@ -162,6 +162,7 @@ class WerewolfExtEnv(ExtEnv):
         use_memory_selection=False,
         new_experience_version="",
         prepare_human_player=Callable,
+        model_name: str = None,
     ) -> tuple[str, list]:
         """init players using different roles' num"""
         role_objs = []
@@ -186,6 +187,7 @@ class WerewolfExtEnv(ExtEnv):
                 use_experience=use_experience,
                 use_memory_selection=use_memory_selection,
                 new_experience_version=new_experience_version,
+                llm_model_name=model_name,
             )
             for i, role in enumerate(role_objs)
         ]

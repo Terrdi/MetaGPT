@@ -39,6 +39,7 @@ from metagpt.strategy.planner import Planner
 from metagpt.utils.common import any_to_name, any_to_str, role_raise_decorator
 from metagpt.utils.project_repo import ProjectRepo
 from metagpt.utils.repair_llm_raw_output import extract_state_value_from_output
+from metagpt.utils.rate_limitor import rate_limitor_registry
 
 if TYPE_CHECKING:
     from metagpt.environment import Environment  # noqa: F401
@@ -135,6 +136,7 @@ class Role(SerializationMixin, ContextMixin, BaseModel):
     constraints: str = ""
     desc: str = ""
     is_human: bool = False
+    llm_model_name: Optional[str] = None
 
     role_id: str = ""
     states: list[str] = []
@@ -166,6 +168,10 @@ class Role(SerializationMixin, ContextMixin, BaseModel):
 
         if self.is_human:
             self.llm = HumanProvider(None)
+        elif self.set_llm and self.models_config and self.llm_model_name:
+            # use custom llm model
+            self.set_llm(self.context.llm_with_cost_manager_from_llm_config(
+                self.models_config.get(self.llm_model_name)))
 
         self._check_actions()
         self.llm.system_prompt = self._get_prefix()
@@ -247,11 +253,12 @@ class Role(SerializationMixin, ContextMixin, BaseModel):
         return self
 
     def _init_action(self, action: Action):
-        if not action.private_llm:
+        if action.private_llm:
             action.set_llm(self.llm, override=True)
         else:
             action.set_llm(self.llm, override=False)
         action.set_prefix(self._get_prefix())
+        return action
 
     def set_action(self, action: Action):
         """Add action to the role."""
@@ -266,7 +273,7 @@ class Role(SerializationMixin, ContextMixin, BaseModel):
         self._reset()
         for action in actions:
             if not isinstance(action, Action):
-                i = action(context=self.context)
+                i = action(context=self.context, llm_name_or_type=self.llm_model_name)
             else:
                 if self.is_human and not isinstance(action.llm, HumanProvider):
                     logger.warning(

@@ -17,6 +17,7 @@ async def start_game(
     use_experience: bool = False,
     use_memory_selection: bool = False,
     new_experience_version: str = "",
+    model_name: str = "",
 ):
     game = WerewolfGame()
     game_setup, players = game.env.init_game_setup(
@@ -30,10 +31,11 @@ async def start_game(
         use_memory_selection=use_memory_selection,
         new_experience_version=new_experience_version,
         prepare_human_player=prepare_human_player,
+        model_name=model_name,
     )
     logger.info(f"{game_setup}")
 
-    players = [Moderator()] + players
+    players = [Moderator(llm_model_name=model_name)] + players
     game.hire(players)
     game.invest(investment)
     game.run_project(game_setup)
@@ -49,6 +51,7 @@ def main(
     use_experience: bool = False,
     use_memory_selection: bool = False,
     new_experience_version: str = "",
+    model_name: str = None,
 ):
     asyncio.run(
         start_game(
@@ -60,6 +63,7 @@ def main(
             use_experience,
             use_memory_selection,
             new_experience_version,
+            model_name,
         )
     )
 
