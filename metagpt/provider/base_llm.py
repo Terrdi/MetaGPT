@@ -269,11 +269,9 @@ class BaseLLM(ABC):
     
     @property
     def rate_limitor(self) -> RateLimitor:
+        if not self.current_rate_limitor:
+            self.current_rate_limitor = rate_limitor_registry.get_by_config(self.config)
         return self.current_rate_limitor
-
-    @rate_limitor.setter
-    def rate_limitor(self, rate_limitor: RateLimitor):
-        self.current_rate_limitor = rate_limitor
 
     def get_timeout(self, timeout: int) -> int:
         return timeout or self.config.timeout or LLM_API_TIMEOUT

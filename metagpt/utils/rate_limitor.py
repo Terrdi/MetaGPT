@@ -1,16 +1,18 @@
 import time
 import threading
 import math
+import json
 from metagpt.utils.token_counter import count_input_tokens
 from metagpt.configs.llm_config import LLMConfig
 from metagpt.logs import logger
-
+from metagpt.configs.models_config import ModelsConfig
 class RateLimitor:
     def __init__(self, rpm: int, tpm: int):
         self.rpm = rpm
         self.tpm = tpm
         self.tpm_bucket = TokenBucket(tpm)
         self.rpm_bucket = TokenBucket(rpm)
+        self.lock = threading.RLock()
     
     def acquire_rpm(self, tokens=1):
         self.rpm_bucket.acquire(tokens)
@@ -18,10 +20,14 @@ class RateLimitor:
     def cost_token(self, usage: dict):
         if not isinstance(usage, dict):
             usage = dict(usage)
-        self.rpm_bucket._cost(usage.get("input_tokens", usage.get('prompt_tokens', 0)))
+        self.tpm_bucket._cost(usage.get("input_tokens", usage.get('prompt_tokens', 0)))
         self.tpm_bucket._cost(usage.get("output_tokens", usage.get('completion_tokens', 0)))
+        if self.rpm > 0 or self.tpm > 0:
+            self.lock.release()
 
     def acquire(self, messages):
+        if self.rpm > 0 or self.tpm > 0:
+            self.lock.acquire()
         tokens = count_input_tokens(messages)
         if self.tpm_bucket._wait(tokens):
             self.acquire_rpm(1)
@@ -70,7 +76,7 @@ class TokenBucket:
                 deficit = tokens - self.tokens
                 wait_time = deficit / self.rate
 
-                logger.debug(f"current wait_time from tpm: {wait_time}")
+                logger.warning(f"current [{threading.current_thread().ident}] with [{self.tokens:.5f}] tokens, wait_time for tpm: {wait_time:.3f}")
                 self.cond.wait(wait_time)
 
     def acquire(self, tokens=1):
@@ -94,7 +100,7 @@ class TokenBucket:
                 deficit = tokens - self.tokens
                 wait_time = deficit / self.rate
 
-                logger.debug(f"current wait_time for rpm: {wait_time}")
+                logger.warning(f"current [{threading.current_thread().ident}] with [{self.tokens:.5f}] tokens, wait_time for rpm: {wait_time:.3f}")
                 
                 # wait until the tokens are replenished (with timeout and notification)
                 self.cond.wait(wait_time)
@@ -112,18 +118,31 @@ class TokenBucket:
 class RateLimitorRegistry:
     def __init__(self):
         self.rate_limitors = {}
+        self.config_items = {}
+
+    def init_rate_limitors(self):
+        for model_name, llm_config in ModelsConfig.default().items():
+            self.register(model_name, llm_config)
+
+    def _config_to_key(self, llm_config: LLMConfig):
+        return json.dumps(llm_config.model_dump())
 
     def register(self, model_name: str, llm_config: LLMConfig):
+        if not llm_config:
+            raise ValueError("llm_config is required")
         if not model_name:
-            model_name = llm_config.model or "_default_llm"
-        if model_name in self.rate_limitors:
-            return self.rate_limitors[model_name]
-        self.rate_limitors[model_name] = RateLimitor(llm_config.rpm, llm_config.tpm)
+            model_name = self._config_to_key(llm_config)
+        if model_name not in self.rate_limitors:
+            self.rate_limitors[model_name] = RateLimitor(llm_config.rpm, llm_config.tpm)
+            self.config_items[self._config_to_key(llm_config)] = model_name
         return self.rate_limitors[model_name]
     
     def get(self, model_name: str):
         if not model_name:
             model_name = "_default_llm"
         return self.rate_limitors.get(model_name)
+    
+    def get_by_config(self, llm_config: LLMConfig):
+        return self.rate_limitors[self._config_to_key(llm_config)]
 
 rate_limitor_registry = RateLimitorRegistry()
